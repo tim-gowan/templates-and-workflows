@@ -70,3 +70,26 @@ jobs:
         run: snyk code test
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          
+      - name: Report Metrics to Port
+        uses: port-labs/port-github-action@v1
+        with:
+          # Add Port credentials
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          operation: UPSERT
+          blueprint: 'code_quality_report'
+          # Create a unique identifier for each report: <repo_name>-<commit_sha>
+          identifier: ${{ github.repository }}-${{ github.sha }}
+          title: "Report for ${{ github.sha }}"
+          properties: |
+            {
+              "commitSha": "${{ github.sha }}",
+              "flake8Issues": ${{ env.FLAKE8_ISSUES }},
+              "avgComplexity": ${{ env.AVG_COMPLEXITY }}
+            }
+          # This block links the new report back to the parent repository
+          relations: |
+            {
+              "repository": "${{ github.repository }}"
+            }
