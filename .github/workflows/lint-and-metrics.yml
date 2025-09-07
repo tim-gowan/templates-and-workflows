@@ -41,18 +41,14 @@ jobs:
       - name: Install dependencies
         run: uv pip install -e ".[dev]"
 
-      # Step 4: Activate the virtual environment
-      - name: Activate virtual environment
-        run: echo "source .venv/bin/activate" >> $GITHUB_ENV
-
-      # Step 5: Check code formatting with Black. Fails if code is not formatted.
+      # Step 4: Check code formatting with Black. Fails if code is not formatted.
       - name: Check formatting with Black
-        run: black --check .
+        run: uv run black --check .
 
       # Step 5: Run Flake8 linter and count the number of issues
       - name: Run Flake8 Linter
         run: |
-          flake8 . --count --exit-zero > flake8_report.txt
+          uv run flake8 . --count --exit-zero > flake8_report.txt
           FLAKE8_ISSUES=$(tail -n1 flake8_report.txt || echo 0)
           echo "FLAKE8_ISSUES=$FLAKE8_ISSUES" >> $GITHUB_ENV
           echo "Flake8 found $FLAKE8_ISSUES issues."
@@ -60,7 +56,7 @@ jobs:
       # Step 6: Calculate average code complexity with Radon
       - name: Calculate Code Complexity with Radon
         run: |
-          radon cc . -a -s > radon_report.txt
+          uv run radon cc . -a -s > radon_report.txt
           AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()' || echo 0)
           echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
           echo "Average complexity is $AVG_COMPLEXITY."
@@ -68,7 +64,7 @@ jobs:
       # Step 7: Run tests with Pytest and get the coverage percentage
       - name: Run Pytest and Get Coverage
         run: |
-          pytest --cov=. --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0 --no-test-strict
+          uv run pytest --cov=. --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0 --no-test-strict
           COVERAGE_PERCENTAGE=$(jq '.totals.percent_covered_display' coverage.json | tr -d '"' || echo 0)
           echo "COVERAGE_PERCENTAGE=${COVERAGE_PERCENTAGE}" >> $GITHUB_ENV
           echo "Test coverage is ${COVERAGE_PERCENTAGE}%."
