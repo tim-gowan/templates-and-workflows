@@ -86,4 +86,22 @@ jobs:
       
       - name: Report Final Success
         if: success()
-        uses: port-labs/port-github-
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ env.PORT_CLIENT_ID }}
+          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          runId: ${{ env.PORT_RUN_ID }}
+          status: SUCCESS
+          logMessage: "🎉 Scaffold complete! Your new repository is ready at https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
+
+      - name: Report Failure
+        if: failure()
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ env.PORT_CLIENT_ID }}
+          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          runId: ${{ env.PORT_RUN_ID }}
+          status: FAILURE
+          logMessage: "🔥 Scaffold failed. Error: ${{ steps.check_errors.outputs.error_message || 'An unexpected error occurred.' }}"
