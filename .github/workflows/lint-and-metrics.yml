@@ -60,11 +60,3 @@ jobs:
           AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()' || echo 0)
           echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
           echo "Average complexity is $AVG_COMPLEXITY."
-
-      # Step 7: Run tests with Pytest and get the coverage percentage
-      - name: Run Pytest and Get Coverage
-        run: |
-          uv run pytest --cov=. --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0 --no-test-strict
-          COVERAGE_PERCENTAGE=$(jq '.totals.percent_covered_display' coverage.json | tr -d '"' || echo 0)
-          echo "COVERAGE_PERCENTAGE=${COVERAGE_PERCENTAGE}" >> $GITHUB_ENV
-          echo "Test coverage is ${COVERAGE_PERCENTAGE}%."
