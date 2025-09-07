@@ -46,7 +46,6 @@ jobs:
           # Capture stderr and continue even if the command fails.
           echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
           gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" --clone 2> /tmp/gh_error.log || true
-          gh secret set --org ${{ env.ORG_NAME }} SNYK_TOKEN --visibility all
 
       - name: Report Creation Success
         uses: port-labs/port-github-action@v1
