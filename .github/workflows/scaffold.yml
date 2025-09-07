@@ -83,7 +83,23 @@ jobs:
             {
               "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
             }
-      
+            
+      - name: Apply Branch Protection Rules
+        run: |
+          echo "Applying branch protection rules to the 'main' branch..."
+          gh api \
+            --verbose \
+            --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}/branches/main/protection \
+            -f required_status_checks[strict]=true \
+            -f "required_status_checks[contexts][]=build-and-test" \
+            -f enforce_admins=true \
+            -f required_pull_request_reviews[required_approving_review_count]=1 \
+            -f required_pull_request_reviews[require_code_owner_reviews]=true \
+            -f required_conversation_resolution=true
+          echo "✅ Branch protection rules applied."
+          
       - name: Report Final Success
         if: success()
         uses: port-labs/port-github-action@v1
