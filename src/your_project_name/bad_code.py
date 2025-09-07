@@ -1,4 +1,4 @@
-# This file is intentionally bad to test the linter.
+# This file is intentionally bad to test the linter - expect bad responses
 
 import sys
 import os  # This is an unused import
