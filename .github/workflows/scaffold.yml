@@ -27,6 +27,7 @@ jobs:
           TEMPLATE_REPO: "tim-gowan/templates-and-workflows"
         run: |
           # Use the GitHub CLI to create a new repository from the template.
+          echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
           gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description="New service: ${{ env.REPO_NAME }}"
           echo "✅ Repository ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} created successfully!"
 
