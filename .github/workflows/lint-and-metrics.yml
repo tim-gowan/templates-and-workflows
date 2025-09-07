@@ -1,0 +1,88 @@
+# This workflow runs on every push to the main branch to analyze code quality.
+name: Lint, Test, and Report Metrics
+
+on:
+  push:
+    branches:
+      - main
+
+# Define permissions required for the job.
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up our fast package manager, uv
+      - name: Setup uv
+        uses: ywiyogo/setup-uv@v1
+        with:
+          uv-version: 'latest'
+
+      # Step 3: Install the project's dev dependencies
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]"
+
+      # Step 4: Check code formatting with Black. Fails if code is not formatted.
+      - name: Check formatting with Black
+        run: black --check .
+
+      # Step 5: Run Flake8 linter and count the number of issues
+      - name: Run Flake8 Linter
+        run: |
+          # Run flake8, ignore exit code, and save statistics to a file.
+          flake8 . --count --exit-zero --max-complexity=10 --statistics > flake8_report.txt
+          # Count the lines in the report to get the number of issues.
+          FLAKE8_ISSUES=$(cat flake8_report.txt | wc -l)
+          # Save the count as a GitHub environment variable for later use.
+          echo "FLAKE8_ISSUES=$FLAKE8_ISSUES" >> $GITHUB_ENV
+          echo "Flake8 found $FLAKE8_ISSUES issues."
+
+      # Step 6: Calculate average code complexity with Radon
+      - name: Calculate Code Complexity with Radon
+        run: |
+          # Run radon, find the "Average complexity" line, and extract the last value (the number).
+          radon cc . -a -s > radon_report.txt
+          AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()')
+          echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
+          echo "Average complexity is $AVG_COMPLEXITY."
+
+      # Step 7: Run tests with Pytest and get the coverage percentage
+      - name: Run Pytest and Get Coverage
+        run: |
+          # Run pytest, generate a coverage report, and save it to a file.
+          # We use --cov-fail-under=0 so it doesn't fail the build, making it non-gating.
+          pytest --cov=. --cov-report=term-missing --cov-fail-under=0 > coverage.txt
+          # Extract the total coverage percentage from the report.
+          COVERAGE_PERCENT=$(grep "TOTAL" coverage.txt | awk '{print $NF}' | sed 's/%//')
+          echo "COVERAGE_PERCENT=${COVERAGE_PERCENT}" >> $GITHUB_ENV
+          echo "Test coverage is ${COVERAGE_PERCENT}%."
+
+      # Step 8: Send all collected metrics to Port
+      # This step will be fully enabled in Phase 2 when we configure Port and its secrets.
+      - name: Send Metrics to Port 🚢
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          operation: UPSERT
+          blueprint: 'codeQualityReport' # This is the blueprint we will create in Port
+          entity: |
+            {
+              "identifier": "${{ github.repository }}#${{ github.sha }}",
+              "title": "Build for ${{ github.sha }}",
+              "properties": {
+                "commitSha": "${{ github.sha }}",
+                "flake8Issues": ${{ env.FLAKE8_ISSUES }},
+                "avgComplexity": ${{ env.AVG_COMPLEXITY }},
+                "testCoverage": ${{ env.COVERAGE_PERCENT }}
+              },
+              "relations": {
+                "service": "${{ github.repository }}"
+              }
+            }

@@ -1,0 +1,73 @@
+# This workflow scans the project's dependencies for known vulnerabilities using Snyk.
+name: Snyk Security Scan
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  snyk:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up our fast package manager, uv
+      - name: Setup uv
+        uses: ywiyogo/setup-uv@v1
+
+      # Step 3: Install dependencies so Snyk can analyze the dependency tree
+      - name: Install dependencies for Snyk
+        run: uv pip install -e ".[dev]"
+
+      # Step 4: Run the Snyk CLI to check for vulnerabilities
+      - name: Run Snyk to check for vulnerabilities
+        # We use the official Snyk action for easy integration.
+        uses: snyk/actions/python@master
+        # This ensures the workflow doesn't fail, making it non-gating.
+        continue-on-error: true
+        env:
+          # You will need to add your Snyk API token to your repository's secrets.
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test
+          # We output the results in JSON format to a file for parsing.
+          args: --json > snyk_results.json
+
+      # Step 5: Parse the Snyk JSON output to count vulnerabilities
+      - name: Parse Snyk results
+        id: parse_snyk
+        run: |
+          # This jq command parses the Snyk JSON output to count vulnerabilities by severity.
+          # It defaults to 0 if no issues of a certain type are found.
+          HIGH_VULNS=$(jq '.vulnerabilities | map(select(.severity == "high")) | length' snyk_results.json)
+          MEDIUM_VULNS=$(jq '.vulnerabilities | map(select(.severity == "medium")) | length' snyk_results.json)
+          LOW_VULNS=$(jq '.vulnerabilities | map(select(.severity == "low")) | length' snyk_results.json)
+
+          # Save the counts as GitHub environment variables for the next step.
+          echo "HIGH_VULNS=${HIGH_VULNS:-0}" >> $GITHUB_ENV
+          echo "MEDIUM_VULNS=${MEDIUM_VULNS:-0}" >> $GITHUB_ENV
+          echo "LOW_VULNS=${LOW_VULNS:-0}" >> $GITHUB_ENV
+          echo "Snyk found ${HIGH_VULNS:-0} high, ${MEDIUM_VULNS:-0} medium, and ${LOW_VULNS:-0} low severity vulnerabilities."
+
+      # Step 6: Send the vulnerability counts to Port
+      - name: Send Snyk Metrics to Port 🚢
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          # We use PATCH to update the existing entity created by the first workflow.
+          operation: PATCH
+          blueprint: 'codeQualityReport'
+          # We target the same entity identifier to add the security metrics to it.
+          entityIdentifier: '"${{ github.repository }}#${{ github.sha }}"'
+          entity: |
+            {
+              "properties": {
+                "snykHigh": ${{ env.HIGH_VULNS }},
+                "snykMedium": ${{ env.MEDIUM_VULNS }},
+                "snykLow": ${{ env.LOW_VULNS }}
+              }
+            }
