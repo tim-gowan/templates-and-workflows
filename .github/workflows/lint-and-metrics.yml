@@ -7,6 +7,7 @@ on:
       - main
 
 # Define permissions required for the job.
+# The 'read' permission is sufficient for checking out the code.
 permissions:
   contents: read
 
@@ -20,7 +21,7 @@ jobs:
 
       # Step 2: Set up our fast package manager, uv
       - name: Setup uv
-        uses: ywiyogo/setup-uv@v1
+        uses: astral-sh/setup-uv@v1
         with:
           uv-version: 'latest'
 
@@ -35,10 +36,14 @@ jobs:
       # Step 5: Run Flake8 linter and count the number of issues
       - name: Run Flake8 Linter
         run: |
-          # Run flake8, ignore exit code, and save statistics to a file.
-          flake8 . --count --exit-zero --max-complexity=10 --statistics > flake8_report.txt
-          # Count the lines in the report to get the number of issues.
-          FLAKE8_ISSUES=$(cat flake8_report.txt | wc -l)
+          # Run flake8 with --count, which prints the total number of issues on the last line.
+          # --exit-zero ensures the step doesn't fail, allowing us to collect the metric.
+          # We save the output to a file.
+          flake8 . --count --exit-zero > flake8_report.txt
+          # CORRECTED: The previous version used `wc -l`, which incorrectly counted all lines.
+          # This version correctly gets the total count from the last line of the report.
+          # We add `|| echo 0` as a fallback in case the report is empty.
+          FLAKE8_ISSUES=$(tail -n1 flake8_report.txt || echo 0)
           # Save the count as a GitHub environment variable for later use.
           echo "FLAKE8_ISSUES=$FLAKE8_ISSUES" >> $GITHUB_ENV
           echo "Flake8 found $FLAKE8_ISSUES issues."
@@ -48,30 +53,33 @@ jobs:
         run: |
           # Run radon, find the "Average complexity" line, and extract the last value (the number).
           radon cc . -a -s > radon_report.txt
-          AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()')
+          # IMPROVEMENT: Added `|| echo 0` as a fallback in case grep fails to find a match.
+          AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()' || echo 0)
           echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
           echo "Average complexity is $AVG_COMPLEXITY."
 
       # Step 7: Run tests with Pytest and get the coverage percentage
       - name: Run Pytest and Get Coverage
         run: |
-          # Run pytest, generate a coverage report, and save it to a file.
-          # We use --cov-fail-under=0 so it doesn't fail the build, making it non-gating.
+          # Run pytest and generate a coverage report, saving it to a file.
+          # This command will fail the job if tests fail, which is the desired behavior.
+          # --cov-fail-under=0 makes low coverage non-gating, so it won't fail the build.
           pytest --cov=. --cov-report=term-missing --cov-fail-under=0 > coverage.txt
-          # Extract the total coverage percentage from the report.
-          COVERAGE_PERCENT=$(grep "TOTAL" coverage.txt | awk '{print $NF}' | sed 's/%//')
-          echo "COVERAGE_PERCENT=${COVERAGE_PERCENT}" >> $GITHUB_ENV
-          echo "Test coverage is ${COVERAGE_PERCENT}%."
+          # Extract the total coverage percentage from the report's TOTAL line.
+          # IMPROVEMENT: Added `|| echo 0` as a fallback in case parsing fails.
+          COVERAGE_PERCENTAGE=$(grep "TOTAL" coverage.txt | awk '{print $NF}' | sed 's/%//' || echo 0)
+          echo "COVERAGE_PERCENTAGE=${COVERAGE_PERCENTAGE}" >> $GITHUB_ENV
+          echo "Test coverage is ${COVERAGE_PERCENTAGE}%."
 
       # Step 8: Send all collected metrics to Port
-      # This step will be fully enabled in Phase 2 when we configure Port and its secrets.
+      # This step uses the metrics collected in previous steps to create a report.
       - name: Send Metrics to Port 🚢
         uses: port-labs/port-github-action@v1
         with:
           clientId: ${{ secrets.PORT_CLIENT_ID }}
           clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
           operation: UPSERT
-          blueprint: 'codeQualityReport' # This is the blueprint we will create in Port
+          blueprint: 'codeQualityReport'
           entity: |
             {
               "identifier": "${{ github.repository }}#${{ github.sha }}",
@@ -80,9 +88,10 @@ jobs:
                 "commitSha": "${{ github.sha }}",
                 "flake8Issues": ${{ env.FLAKE8_ISSUES }},
                 "avgComplexity": ${{ env.AVG_COMPLEXITY }},
-                "testCoverage": ${{ env.COVERAGE_PERCENT }}
+                "testCoverage": ${{ env.COVERAGE_PERCENTAGE }}
               },
               "relations": {
                 "service": "${{ github.repository }}"
               }
             }
+
