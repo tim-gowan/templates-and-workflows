@@ -1,7 +1,10 @@
 [project]
-name = "my-cool-project"
+name = "{{ cookiecutter.project_name }}"
 version = "0.1.0"
-description = "A project scaffolded from our template."
+description = "{{ cookiecutter.project_description }}"
+authors = [
+    { name = "{{ cookiecutter.author_name }}", email = "{{ cookiecutter.author_email }}" }
+]
 requires-python = ">=3.10"
 dependencies = [
     # Add your core dependencies here, e.g.,
@@ -36,5 +39,3 @@ testpaths = ["tests"]
 max-line-length = 88
 extend-ignore = ["E203", "E501", "W503"]
 exclude = ["venv", ".venv", ".git"]
-
-
