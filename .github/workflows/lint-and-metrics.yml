@@ -41,7 +41,11 @@ jobs:
       - name: Install dependencies
         run: uv pip install -e ".[dev]"
 
-      # Step 4: Check code formatting with Black. Fails if code is not formatted.
+      # Step 4: Activate the virtual environment
+      - name: Activate virtual environment
+        run: echo "source .venv/bin/activate" >> $GITHUB_ENV
+
+      # Step 5: Check code formatting with Black. Fails if code is not formatted.
       - name: Check formatting with Black
         run: black --check .
 
