@@ -1,0 +1,46 @@
+# This workflow is triggered by a self-service action in Port to create a new repository.
+name: Scaffold New Service
+
+# This allows the workflow to be triggered manually or by an API call.
+on:
+  workflow_dispatch:
+    # Define the inputs that the workflow expects to receive from Port.
+    inputs:
+      repo_name:
+        description: 'Name for the new repository'
+        required: true
+        type: string
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create repository from template
+        env:
+          # A GitHub Personal Access Token (PAT) with 'repo' scope is required.
+          # The default GITHUB_TOKEN does not have permission to create repositories.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          REPO_NAME: ${{ github.event.inputs.repo_name }}
+          ORG_NAME: "tim-gowan" # Your GitHub username or organization
+          TEMPLATE_REPO: "tim-gowan/templates-and-workflows"
+        run: |
+          # Use the GitHub CLI to create a new repository from the template.
+          gh repo create ${ORG_NAME}/${REPO_NAME} --template=${TEMPLATE_REPO} --public --description="New service: ${REPO_NAME}"
+          echo "✅ Repository ${ORG_NAME}/${REPO_NAME} created successfully!"
+
+      # This step will register the newly created repo as a microservice entity in Port.
+      - name: Register new service in Port 🚢
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          operation: UPSERT
+          blueprint: 'microservice' # The identifier of our service blueprint
+          entity: |
+            {
+              "identifier": "${{ env.ORG_NAME }}/${{ env.REPO_NAME }}",
+              "title": "${{ env.REPO_NAME }}",
+              "properties": {
+                "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
+              }
+            }
