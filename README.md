@@ -1,42 +1,55 @@
 # Project Template
 
-This is a template for creating new Python projects.
+This is a template for creating new Python projects using a self-service action in Port.
+
+-----
+
+## Prerequisites
+
+Before the CI/CD pipeline can run, you must configure the following secrets in your new repository's settings under **Settings \> Secrets and variables \> Actions**:
+
+  * **`PORT_CLIENT_ID`**: Your Port Client ID.
+  * **`PORT_CLIENT_SECRET`**: Your Port Client Secret.
+  * **`SNYK_TOKEN`**: Your Snyk API token for security scanning.
+
+The scaffolding action also requires a **`PAT_TOKEN`** to be configured in the template repository's secrets.
+
+-----
 
 ## Getting Started
 
-To use this template, follow these steps:
+To create a new project from this template, do not clone this repository directly. Instead, follow these steps:
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/tim-gowan/templates-and-workflows.git your-project-name
-    cd your-project-name
-    ```
-2.  **Update `pyproject.toml`:**
-    Open `pyproject.toml` and replace the placeholder values for `name`, `description`, and `authors` with your project's information.
-3.  **Rename the package directory:**
-    Rename the `src/your_project_name` directory to match the `name` you set in `pyproject.toml`.
-4.  **Install dependencies:**
-    ```bash
-    uv pip install -e ".[dev]"
-    ```
+1.  **Navigate to the Port UI:**
+    Go to [https://app.port.io/self-serve](https://app.port.io/self-serve).
+2.  **Run the Scaffolding Action:**
+    Find and run the **"Scaffold Python UV Project"** action.
+3.  **Provide a Repository Name:**
+    Enter a name for your new repository when prompted.
+4.  **Access Your New Repository:**
+    Once the action is complete, your new repository will be created and ready to use.
+
+-----
 
 ## Local Development
 
 This project comes with a set of tools to ensure code quality and consistency.
 
-- **Formatting**: We use `black` for code formatting. To format your code, run:
-  ```bash
-  black .
-  ```
-- **Linting**: We use `flake8` to check for code style issues. To run the linter, use:
-  ```bash
-  flake8 .
-  ```
-- **Testing**: We use `pytest` for running tests. To run the test suite, use:
-  ```bash
-  pytest
-  ```
-  **Note:** The CI pipeline will skip this step if no tests are found.
+  - **Formatting**: We use `black` for code formatting. To format your code, run:
+    ```bash
+    black .
+    ```
+  - **Linting**: We use `flake8` to check for code style issues. To run the linter, use:
+    ```bash
+    flake8 .
+    ```
+  - **Testing**: We use `pytest` for running tests. To run the test suite, use:
+    ```bash
+    pytest
+    ```
+    **Note:** The CI pipeline will skip this step if no tests are found.
+
+-----
 
 ## CI/CD Pipeline
 
