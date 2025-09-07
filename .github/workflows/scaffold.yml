@@ -47,80 +47,26 @@ jobs:
           echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
           gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" --clone 2> /tmp/gh_error.log || true
 
+      - name: Check for Creation Errors
+        id: check_errors
+        run: |
+          # If the error log has content, an error might have occurred.
+          if [ -s /tmp/gh_error.log ]; then
+            # If the error is NOT the "already exists" error, then it's a real failure.
+            if ! grep -q "Name already exists on this account" /tmp/gh_error.log; then
+              ERROR_CONTENT=$(cat /tmp/gh_error.log)
+              echo "error_message=An error occurred during repository creation: $ERROR_CONTENT" >> $GITHUB_OUTPUT
+              exit 1
+            else
+              # If it IS the "already exists" error, we issue a warning and succeed.
+              echo "::warning::Repository '${{ env.REPO_NAME }}' already exists. Continuing."
+            fi
+          fi
+
       - name: Report Creation Success
         uses: port-labs/port-github-action@v1
         with:
           clientId: ${{ env.PORT_CLIENT_ID }}
           clientSecret: ${{ env.PORT_CLIENT_SECRET }}
           operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
-          logMessage: "✅ Repository created (or already existed) successfully!"
-
-      - name: Initialize main branch
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          # Only run initialization if the directory was newly cloned
-          if [ -d "${{ env.REPO_NAME }}" ]; then
-            cd ${{ env.REPO_NAME }}
-            # Check if the repo is empty (no commits yet)
-            if git rev-parse --is-inside-work-tree && ! git rev-parse --verify HEAD >/dev/null 2>&1; then
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              git commit --allow-empty -m "Initial commit to establish main branch"
-              git push
-            fi
-          fi
-
-      - name: Apply Branch Protection Rules
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Applying branch protection rules to the 'main' branch..."
-          gh api \
-            --method PUT \
-            -H "Accept: application/vnd.github+json" \
-            /repos/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}/branches/main/protection \
-            -f required_status_checks[strict]=true \
-            -f "required_status_checks[contexts][]=build-and-test" \
-            -f enforce_admins=true \
-            -f required_pull_request_reviews[required_approving_review_count]=1 \
-            -f required_pull_request_reviews[require_code_owner_reviews]=true \
-            -f required_conversation_resolution=true
-          echo "✅ Branch protection rules applied."
-
-      - name: Register new service in Port 🚢
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: UPSERT
-          blueprint: 'microservice'
-          identifier: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}
-          title: ${{ env.REPO_NAME }}
-          properties: |
-            {
-              "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-            }
-      
-      - name: Report Final Success
-        if: success()
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
-          status: SUCCESS
-          logMessage: "🎉 Scaffold complete! Your new repository is ready at https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-
-      - name: Report Failure
-        if: failure()
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
-          status: FAILURE
-          logMessage: "🔥 Scaffold failed. Error: ${{ steps.check_errors.outputs.error_message || 'An unexpected error occurred.' }}"
+          runId: ${{ env.PORT_RUN_ID
