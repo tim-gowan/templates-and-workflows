@@ -47,22 +47,6 @@ jobs:
           echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
           gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" --clone 2> /tmp/gh_error.log || true
 
-      - name: Check for Creation Errors
-        id: check_errors
-        run: |
-          # If the error log has content, an error might have occurred.
-          if [ -s /tmp/gh_error.log ]; then
-            # If the error is NOT the "already exists" error, then it's a real failure.
-            if ! grep -q "Name already exists on this account" /tmp/gh_error.log; then
-              ERROR_CONTENT=$(cat /tmp/gh_error.log)
-              echo "error_message=An error occurred during repository creation: $ERROR_CONTENT" >> $GITHUB_OUTPUT
-              exit 1
-            else
-              # If it IS the "already exists" error, we print a message and succeed.
-              echo "Repository already exists. Continuing."
-            fi
-          fi
-
       - name: Report Creation Success
         uses: port-labs/port-github-action@v1
         with:
