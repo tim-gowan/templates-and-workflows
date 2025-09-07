@@ -45,4 +45,34 @@ jobs:
           # Use the GitHub CLI to create a new repository from the template.
           # Capture stderr to check for specific errors and continue on error.
           echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-          gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description
+          gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" 2> /tmp/gh_error.log || true
+
+      - name: Check for Creation Errors
+        id: check_errors
+        run: |
+          # Check the captured error log for common issues.
+          if grep -q "Name already exists on this account" /tmp/gh_error.log; then
+            echo "error_message=Repository name '${{ env.REPO_NAME }}' already exists." >> $GITHUB_OUTPUT
+            exit 1
+          # Check if the error log is not empty, indicating an unknown error
+          elif [ -s /tmp/gh_error.log ]; then
+            ERROR_CONTENT=$(cat /tmp/gh_error.log)
+            echo "error_message=An error occurred during repository creation: $ERROR_CONTENT" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Report Creation Success
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ env.PORT_CLIENT_ID }}
+          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          runId: ${{ env.PORT_RUN_ID }}
+          logMessage: "✅ Repository created successfully!"
+
+      - name: Register new service in Port 🚢
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ env.PORT_CLIENT_ID }}
+          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
+          operation: UPSERT
