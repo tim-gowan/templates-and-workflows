@@ -46,10 +46,12 @@ jobs:
       - name: Report Creation Success
         uses: port-labs/port-github-action@v1
         with:
-          # ... (no change here)
+          clientId: ${{ env.PORT_CLIENT_ID }}
+          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          runId: ${{ env.PORT_RUN_ID }}
           logMessage: "✅ Repository created (or already existed) successfully!"
 
-      # ✨ NEW STEP: Gather details from the newly created repository
       - name: Gather Repository Details
         id: repo_details
         run: |
@@ -58,14 +60,12 @@ jobs:
           echo "DEFAULT_BRANCH=$DEFAULT_BRANCH" >> $GITHUB_ENV
           echo "Found default branch: $DEFAULT_BRANCH"
 
-      # ✏️ MODIFIED STEP: Register new service in Port with more details
       - name: Register new service in Port 🚢
         uses: port-labs/port-github-action@v1
         with:
           clientId: ${{ env.PORT_CLIENT_ID }}
           clientSecret: ${{ env.PORT_CLIENT_SECRET }}
           operation: UPSERT
-          # FIX: Your blueprint is 'githubRepository', not 'microservice'
           blueprint: 'githubRepository'
           identifier: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}
           title: ${{ env.REPO_NAME }}
