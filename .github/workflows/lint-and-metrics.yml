@@ -35,6 +35,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-uv-
 
+      # CORRECTION: Create a virtual environment for uv to use.
+      - name: Create virtual environment
+        run: uv venv
+
       # Step 3: Install the project's dev dependencies
       - name: Install dependencies
         run: uv pip install -e ".[dev]"
