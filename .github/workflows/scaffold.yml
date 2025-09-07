@@ -77,8 +77,8 @@ jobs:
           clientSecret: ${{ env.PORT_CLIENT_SECRET }}
           operation: UPSERT
           blueprint: 'microservice'
-          identifier: '"${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"'
-          title: '"${{ env.REPO_NAME }}"'
+          identifier: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}
+          title: ${{ env.REPO_NAME }}
           properties: |
             {
               "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
