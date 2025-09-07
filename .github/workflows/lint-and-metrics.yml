@@ -25,6 +25,16 @@ jobs:
         with:
           uv-version: 'latest'
 
+      # IMPROVEMENT: Cache dependencies to speed up subsequent runs.
+      # The cache is invalidated when the pyproject.toml file changes.
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
       # Step 3: Install the project's dev dependencies
       - name: Install dependencies
         run: uv pip install -e ".[dev]"
@@ -38,22 +48,16 @@ jobs:
         run: |
           # Run flake8 with --count, which prints the total number of issues on the last line.
           # --exit-zero ensures the step doesn't fail, allowing us to collect the metric.
-          # We save the output to a file.
           flake8 . --count --exit-zero > flake8_report.txt
-          # CORRECTED: The previous version used `wc -l`, which incorrectly counted all lines.
-          # This version correctly gets the total count from the last line of the report.
-          # We add `|| echo 0` as a fallback in case the report is empty.
           FLAKE8_ISSUES=$(tail -n1 flake8_report.txt || echo 0)
-          # Save the count as a GitHub environment variable for later use.
           echo "FLAKE8_ISSUES=$FLAKE8_ISSUES" >> $GITHUB_ENV
           echo "Flake8 found $FLAKE8_ISSUES issues."
 
       # Step 6: Calculate average code complexity with Radon
       - name: Calculate Code Complexity with Radon
         run: |
-          # Run radon, find the "Average complexity" line, and extract the last value (the number).
+          # Run radon, find the "Average complexity" line, and extract the last value.
           radon cc . -a -s > radon_report.txt
-          # IMPROVEMENT: Added `|| echo 0` as a fallback in case grep fails to find a match.
           AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()' || echo 0)
           echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
           echo "Average complexity is $AVG_COMPLEXITY."
@@ -61,13 +65,8 @@ jobs:
       # Step 7: Run tests with Pytest and get the coverage percentage
       - name: Run Pytest and Get Coverage
         run: |
-          # Run pytest and generate a coverage report, saving it to a file.
-          # This command will fail the job if tests fail, which is the desired behavior.
-          # --cov-fail-under=0 makes low coverage non-gating, so it won't fail the build.
-          pytest --cov=. --cov-report=term-missing --cov-fail-under=0 > coverage.txt
-          # Extract the total coverage percentage from the report's TOTAL line.
-          # IMPROVEMENT: Added `|| echo 0` as a fallback in case parsing fails.
-          COVERAGE_PERCENTAGE=$(grep "TOTAL" coverage.txt | awk '{print $NF}' | sed 's/%//' || echo 0)
+          pytest --cov=. --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0
+          COVERAGE_PERCENTAGE=$(jq '.totals.percent_covered_display' coverage.json | tr -d '"' || echo 0)
           echo "COVERAGE_PERCENTAGE=${COVERAGE_PERCENTAGE}" >> $GITHUB_ENV
           echo "Test coverage is ${COVERAGE_PERCENTAGE}%."
 
