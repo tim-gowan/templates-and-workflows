@@ -14,17 +14,16 @@ on:
         description: 'The Port run ID for reporting'
         required: true
         type: string
-
 jobs:
   scaffold:
     runs-on: ubuntu-latest
-    # Define environment variables at the job level.
     env:
       REPO_NAME: ${{ github.event.inputs.repo_name }}
       ORG_NAME: "tim-gowan" # Your GitHub username or organization
       PORT_RUN_ID: ${{ github.event.inputs.port_run_id }}
       PORT_CLIENT_ID: ${{ secrets.PORT_CLIENT_ID }}
       PORT_CLIENT_SECRET: ${{ secrets.PORT_CLIENT_SECRET }}
+      GH_TOKEN: ${{ secrets.PAT_TOKEN }} # Ensure GH_TOKEN is available to all steps
 
     steps:
       - name: Send Starting Message to Port
@@ -39,35 +38,43 @@ jobs:
       - name: Create repository from template
         id: create_repo
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           TEMPLATE_REPO: "tim-gowan/templates-and-workflows"
         run: |
-          # Use the GitHub CLI to create a new repository from the template and clone it locally.
-          # Capture stderr and continue even if the command fails.
           echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
           gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" --clone 2> /tmp/gh_error.log || true
 
       - name: Report Creation Success
         uses: port-labs/port-github-action@v1
         with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
+          # ... (no change here)
           logMessage: "✅ Repository created (or already existed) successfully!"
 
+      # ✨ NEW STEP: Gather details from the newly created repository
+      - name: Gather Repository Details
+        id: repo_details
+        run: |
+          # Use the GitHub CLI to get the default branch name
+          DEFAULT_BRANCH=$(gh repo view ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --json defaultBranchRef --jq .defaultBranchRef.name)
+          echo "DEFAULT_BRANCH=$DEFAULT_BRANCH" >> $GITHUB_ENV
+          echo "Found default branch: $DEFAULT_BRANCH"
+
+      # ✏️ MODIFIED STEP: Register new service in Port with more details
       - name: Register new service in Port 🚢
         uses: port-labs/port-github-action@v1
         with:
           clientId: ${{ env.PORT_CLIENT_ID }}
           clientSecret: ${{ env.PORT_CLIENT_SECRET }}
           operation: UPSERT
-          blueprint: 'microservice'
+          # FIX: Your blueprint is 'githubRepository', not 'microservice'
+          blueprint: 'githubRepository'
           identifier: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}
           title: ${{ env.REPO_NAME }}
           properties: |
             {
-              "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
+              "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}",
+              "defaultBranch": "${{ env.DEFAULT_BRANCH }}",
+              "internet_facing": true,
+              "data_classification": ["None"]
             }
       
       - name: Report Final Success
