@@ -17,7 +17,7 @@ jobs:
     # Define environment variables at the job level to make them accessible to all steps.
     env:
       REPO_NAME: ${{ github.event.inputs.repo_name }}
-      ORG_NAME: "tim-gowan" # Your GitHub username or organization
+      ORG_NAME: "tgowan" # Your GitHub username or organization
     steps:
       - name: Create repository from template
         env:
