@@ -38,13 +38,16 @@ jobs:
           clientId: ${{ secrets.PORT_CLIENT_ID }}
           clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
           operation: UPSERT
-          blueprint: 'microservice' # The identifier of our service blueprint
-          entity: |
+          blueprint: 'microservice'
+          identifier: '"${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"'
+          title: '"${{ env.REPO_NAME }}"'
+          properties: |
             {
-              "identifier": "${{ env.ORG_NAME }}/${{ env.REPO_NAME }}",
-              "title": "${{ env.REPO_NAME }}",
-              "properties": {
-                "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-              }
+              "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
             }
 
+      - name: All done! ✅
+        if: success()
+        run: |
+          echo "🎉 Scaffold successful!"
+          echo "Access your new repository here: https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
