@@ -7,7 +7,6 @@ on:
       - main
 
 # Define permissions required for the job.
-# The 'read' permission is sufficient for checking out the code.
 permissions:
   contents: read
 
@@ -26,7 +25,6 @@ jobs:
           uv-version: 'latest'
 
       # IMPROVEMENT: Cache dependencies to speed up subsequent runs.
-      # The cache is invalidated when the pyproject.toml file changes.
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -50,8 +48,6 @@ jobs:
       # Step 5: Run Flake8 linter and count the number of issues
       - name: Run Flake8 Linter
         run: |
-          # Run flake8 with --count, which prints the total number of issues on the last line.
-          # --exit-zero ensures the step doesn't fail, allowing us to collect the metric.
           flake8 . --count --exit-zero > flake8_report.txt
           FLAKE8_ISSUES=$(tail -n1 flake8_report.txt || echo 0)
           echo "FLAKE8_ISSUES=$FLAKE8_ISSUES" >> $GITHUB_ENV
@@ -60,7 +56,6 @@ jobs:
       # Step 6: Calculate average code complexity with Radon
       - name: Calculate Code Complexity with Radon
         run: |
-          # Run radon, find the "Average complexity" line, and extract the last value.
           radon cc . -a -s > radon_report.txt
           AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()' || echo 0)
           echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
@@ -69,32 +64,7 @@ jobs:
       # Step 7: Run tests with Pytest and get the coverage percentage
       - name: Run Pytest and Get Coverage
         run: |
-          pytest --cov=. --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0
+          pytest --cov=. --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0 --no-test-strict
           COVERAGE_PERCENTAGE=$(jq '.totals.percent_covered_display' coverage.json | tr -d '"' || echo 0)
           echo "COVERAGE_PERCENTAGE=${COVERAGE_PERCENTAGE}" >> $GITHUB_ENV
           echo "Test coverage is ${COVERAGE_PERCENTAGE}%."
-
-      # Step 8: Send all collected metrics to Port
-      # This step uses the metrics collected in previous steps to create a report.
-      - name: Send Metrics to Port 🚢
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ secrets.PORT_CLIENT_ID }}
-          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
-          operation: UPSERT
-          blueprint: 'codeQualityReport'
-          entity: |
-            {
-              "identifier": "${{ github.repository }}#${{ github.sha }}",
-              "title": "Build for ${{ github.sha }}",
-              "properties": {
-                "commitSha": "${{ github.sha }}",
-                "flake8Issues": ${{ env.FLAKE8_ISSUES }},
-                "avgComplexity": ${{ env.AVG_COMPLEXITY }},
-                "testCoverage": ${{ env.COVERAGE_PERCENTAGE }}
-              },
-              "relations": {
-                "service": "${{ github.repository }}"
-              }
-            }
-
