@@ -1,142 +1,72 @@
-# This workflow is triggered by a self-service action in Port to create a new repository.
-name: Scaffold New Service
+# This workflow runs on every push to the main branch to analyze code quality.
+name: Lint, Test, and Report Metrics
 
-# This allows the workflow to be triggered manually or by an API call.
 on:
-  workflow_dispatch:
-    # Define the inputs that the workflow expects to receive from Port.
-    inputs:
-      repo_name:
-        description: 'Name for the new repository'
-        required: true
-        type: string
-      port_run_id:
-        description: 'The Port run ID for reporting'
-        required: true
-        type: string
+  push:
+    branches:
+      - main
+
+# Define permissions required for the job.
+permissions:
+  contents: read
 
 jobs:
-  scaffold:
+  build-and-test:
     runs-on: ubuntu-latest
-    # Define environment variables at the job level.
-    env:
-      REPO_NAME: ${{ github.event.inputs.repo_name }}
-      ORG_NAME: "tim-gowan" # Your GitHub username or organization
-      PORT_RUN_ID: ${{ github.event.inputs.port_run_id }}
-      PORT_CLIENT_ID: ${{ secrets.PORT_CLIENT_ID }}
-      PORT_CLIENT_SECRET: ${{ secrets.PORT_CLIENT_SECRET }}
-
     steps:
-      - name: Send Starting Message to Port
-        uses: port-labs/port-github-action@v1
+      # Step 1: Check out the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up our fast package manager, uv
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v1
         with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
-          logMessage: "🚀 Starting scaffold process for repository: ${{ env.REPO_NAME }}"
+          version: 'latest'
 
-      - name: Create repository from template
-        id: create_repo
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          TEMPLATE_REPO: "tim-gowan/templates-and-workflows"
-        run: |
-          # Use the GitHub CLI to create a new repository from the template and clone it locally.
-          # Capture stderr and continue even if the command fails.
-          echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-          gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" --clone 2> /tmp/gh_error.log || true
-
-      - name: Check for Creation Errors
-        id: check_errors
-        run: |
-          # If the error log has content, an error might have occurred.
-          if [ -s /tmp/gh_error.log ]; then
-            # If the error is NOT the "already exists" error, then it's a real failure.
-            if ! grep -q "Name already exists on this account" /tmp/gh_error.log; then
-              ERROR_CONTENT=$(cat /tmp/gh_error.log)
-              echo "error_message=An error occurred during repository creation: $ERROR_CONTENT" >> $GITHUB_OUTPUT
-              exit 1
-            else
-              # If it IS the "already exists" error, we print a message and succeed.
-              echo "Repository already exists. Continuing."
-            fi
-          fi
-
-      - name: Report Creation Success
-        uses: port-labs/port-github-action@v1
+      # IMPROVEMENT: Cache dependencies to speed up subsequent runs.
+      - name: Cache dependencies
+        uses: actions/cache@v4
         with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
-          logMessage: "✅ Repository created (or already existed) successfully!"
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
 
-      - name: Initialize main branch
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # CORRECTION: Create a virtual environment for uv to use.
+      - name: Create virtual environment
+        run: uv venv
+
+      # Step 3: Install the project's dev dependencies
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]"
+
+      # Step 4: Check code formatting with Black. Fails if code is not formatted.
+      - name: Check formatting with Black
+        run: uv run black --check .
+
+      # Step 5: Run Flake8 linter and count the number of issues
+      - name: Run Flake8 Linter
         run: |
-          # Only run initialization if the directory was newly cloned
-          if [ -d "${{ env.REPO_NAME }}" ]; then
-            cd ${{ env.REPO_NAME }}
-            # Check if the repo is empty (no commits yet)
-            if git rev-parse --is-inside-work-tree && ! git rev-parse --verify HEAD >/dev/null 2>&1; then
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              git commit --allow-empty -m "Initial commit to establish main branch"
-              git push
-            fi
-          fi
+          uv run flake8 . --count --exit-zero > flake8_report.txt
+          FLAKE8_ISSUES=$(tail -n1 flake8_report.txt || echo 0)
+          echo "FLAKE8_ISSUES=$FLAKE8_ISSUES" >> $GITHUB_ENV
+          echo "Flake8 found $FLAKE8_ISSUES issues."
 
-      - name: Apply Branch Protection Rules
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # Step 6: Calculate average code complexity with Radon
+      - name: Calculate Code Complexity with Radon
         run: |
-          echo "Applying branch protection rules to the 'main' branch..."
-          gh api \
-            --method PUT \
-            -H "Accept: application/vnd.github+json" \
-            /repos/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}/branches/main/protection \
-            -f required_status_checks[strict]=true \
-            -f "required_status_checks[contexts][]=build-and-test" \
-            -f enforce_admins=true \
-            -f required_pull_request_reviews[required_approving_review_count]=1 \
-            -f required_pull_request_reviews[require_code_owner_reviews]=true \
-            -f required_conversation_resolution=true
-          echo "✅ Branch protection rules applied."
-
-      - name: Register new service in Port 🚢
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: UPSERT
-          blueprint: 'microservice'
-          identifier: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}
-          title: ${{ env.REPO_NAME }}
-          properties: |
-            {
-              "url": "https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-            }
+          uv run radon cc . -a -s > radon_report.txt
+          AVG_COMPLEXITY=$(grep "Average complexity" radon_report.txt | awk '{print $NF}' | tr -d '()' || echo 0)
+          echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
+          echo "Average complexity is $AVG_COMPLEXITY."
       
-      - name: Report Final Success
-        if: success()
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
-          status: SUCCESS
-          logMessage: "🎉 Scaffold complete! Your new repository is ready at https://github.com/${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-
-      - name: Report Failure
-        if: failure()
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ env.PORT_CLIENT_ID }}
-          clientSecret: ${{ env.PORT_CLIENT_SECRET }}
-          operation: PATCH_RUN
-          runId: ${{ env.PORT_RUN_ID }}
-          status: FAILURE
-          logMessage: "🔥 Scaffold failed. Error: ${{ steps.check_errors.outputs.error_message || 'An unexpected error occurred.' }}"
+      # Step 7: Setup Snyk CLI
+      - name: Setup Snyk
+        uses: snyk/actions/setup@master
+      
+      # Step 8: Run Snyk Code Analysis
+      - name: Run Snyk Code Test
+        run: snyk code test
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
