@@ -42,10 +42,9 @@ jobs:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           TEMPLATE_REPO: "tim-gowan/templates-and-workflows"
         run: |
-          # Use the GitHub CLI to create a new repository from the template.
-          # Capture stderr and continue even if the command fails.
+          # Use the GitHub CLI to create a new repository from the template and clone it locally.
           echo "Creating repository: ${{ env.ORG_NAME }}/${{ env.REPO_NAME }}"
-          gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" 2> /tmp/gh_error.log || true
+          gh repo create ${{ env.ORG_NAME }}/${{ env.REPO_NAME }} --template=${{ env.TEMPLATE_REPO }} --public --description "New service: ${{ env.REPO_NAME }}" --clone 2> /tmp/gh_error.log || true
 
       - name: Check for Creation Errors
         id: check_errors
@@ -73,6 +72,16 @@ jobs:
           runId: ${{ env.PORT_RUN_ID }}
           logMessage: "✅ Repository created successfully!"
 
+      - name: Initialize main branch
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          cd ${{ env.REPO_NAME }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "Initial commit to establish main branch"
+          git push
+
       - name: Apply Branch Protection Rules
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -93,6 +102,7 @@ jobs:
       - name: Register new service in Port 🚢
         uses: port-labs/port-github-action@v1
         with:
+          # ... (rest of the workflow remains the same)
           clientId: ${{ env.PORT_CLIENT_ID }}
           clientSecret: ${{ env.PORT_CLIENT_SECRET }}
           operation: UPSERT
