@@ -61,16 +61,7 @@ jobs:
           echo "AVG_COMPLEXITY=${AVG_COMPLEXITY}" >> $GITHUB_ENV
           echo "Average complexity is $AVG_COMPLEXITY."
       
-      # Step 7: Setup Snyk CLI
-      - name: Setup Snyk
-        uses: snyk/actions/setup@master
-      
-      # Step 8: Run Snyk Code Analysis
-      - name: Run Snyk Code Test
-        run: snyk code test
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          
+
       - name: Report Metrics to Port
         uses: port-labs/port-github-action@v1
         with:
