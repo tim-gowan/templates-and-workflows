@@ -71,7 +71,7 @@ jobs:
           operation: UPSERT
           blueprint: 'code_quality_report'
           # Create a unique identifier for each report: <repo_name>-<commit_sha>
-          identifier: ${{ github.repository }}-${{ github.sha }}
+          identifier: ${{ github.repository }}${{ github.sha }}
           title: "Report for ${{ github.sha }}"
           properties: |
             {
